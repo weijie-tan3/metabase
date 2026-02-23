@@ -8,6 +8,7 @@
    [metabase.driver-api.core :as driver-api]
    [metabase.driver.sql-jdbc.common :as sql-jdbc.common]
    [metabase.driver.sql-jdbc.connection :as sql-jdbc.conn]
+   [metabase.util.json :as json]
    [metabase.util.log :as log])
   (:import
    (java.net URI)
@@ -38,11 +39,9 @@
     (str/join "&" (map (fn [[k v]] (str (url-encode-param k) "=" (url-encode-param v))) params))))
 
 (defn- parse-json-token-response
-  "Parses a JSON token response body and extracts the access_token field.
-   Uses a simple regex-based approach to avoid adding a JSON dependency."
+  "Parses a JSON token response body and extracts the access_token field."
   ^String [^String body]
-  (when-let [match (re-find #"\"access_token\"\s*:\s*\"([^\"]+)\"" body)]
-    (second match)))
+  (get (json/decode+kw body) :access_token))
 
 (defn- fetch-oauth-token!
   "Performs an OAuth 2.0 client credentials grant to obtain an access token.
@@ -62,11 +61,11 @@
         status   (.statusCode response)]
     (when-not (<= 200 status 299)
       (throw (ex-info (str "OAuth token request failed with HTTP status " status)
-                      {:status status :body (.body response) :url oauth-token-url})))
+                      {:status status :url oauth-token-url})))
     (let [token (parse-json-token-response (.body response))]
       (when (str/blank? token)
         (throw (ex-info "No access_token found in OAuth token response"
-                        {:body (.body response) :url oauth-token-url})))
+                        {:url oauth-token-url})))
       (log/debugf "Successfully obtained OAuth access token from %s" oauth-token-url)
       token)))
 
@@ -91,7 +90,8 @@
 (defn- resolve-access-token
   "Resolves the access token based on the configured auth method.
    - `:password` — no token, uses standard user/password
-   - `:jwt` — uses the statically configured access token
+   - `:jwt` — uses the statically configured access token (`:access-token-value` is the resolved
+     secret value that Metabase provides for `type: secret` fields defined in metabase-plugin.yaml)
    - `:oauth` — fetches a token using client credentials grant
    - Auth provider — uses the token injected by [[incorporate-auth-provider-details]]"
   [{:keys [auth-method access-token-value] :as details}]
