@@ -1,0 +1,115 @@
+info:
+  name: Metabase Trino Driver
+  version: 1.0.0
+  description: Allows Metabase to connect to Trino query engines with support for OAuth, Azure Service Principal, and JWT authentication.
+dependencies:
+  - plugin: Metabase Starburst Driver
+driver:
+  name: trino
+  display-name: Trino
+  lazy-load: true
+  parent: starburst
+  connection-properties:
+    - group:
+        container-style: ["grid", "3fr 1fr"]
+        fields:
+          - host
+          - merge:
+              - port
+              - default: 8443
+    - merge:
+        - dbname
+        - name: catalog
+          placeholder: tpch
+          display-name: Catalog
+          required: true
+          helper-text: Trino catalogs contain schemas and reference data sources via a connector.
+    - name: schema
+      display-name: Schema (optional)
+      required: false
+      helper-text: Only add tables to Metabase that come from a specific schema.
+    - name: auth-method
+      display-name: Authentication method
+      type: select
+      options:
+        - name: Password
+          value: password
+        - name: JWT / Access Token
+          value: jwt
+        - name: OAuth 2.0 / Azure SPN
+          value: oauth
+      default: password
+      helper-text: Choose how to authenticate with the Trino server.
+    - merge:
+        - user
+        - required: false
+    - merge:
+        - password
+        - required: false
+          visible-if:
+            auth-method: password
+    - name: access-token
+      display-name: Access Token / JWT
+      type: secret
+      secret-kind: password
+      required: true
+      placeholder: "eyJhbGciOiJSUzI1NiIs..."
+      helper-text: A JWT or bearer token used to authenticate with the Trino server.
+      visible-if:
+        auth-method: jwt
+    - name: oauth-client-id
+      display-name: OAuth Client ID
+      required: true
+      placeholder: "e26ce240-0a12-454f-934f-4c646603cb61"
+      helper-text: The OAuth 2.0 Client ID or Azure Service Principal Application (Client) ID.
+      visible-if:
+        auth-method: oauth
+    - name: oauth-client-secret
+      display-name: OAuth Client Secret
+      type: secret
+      secret-kind: password
+      required: true
+      helper-text: The OAuth 2.0 Client Secret or Azure Service Principal secret.
+      visible-if:
+        auth-method: oauth
+    - name: oauth-token-url
+      display-name: Token URL
+      required: true
+      placeholder: "https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token"
+      helper-text: The OAuth 2.0 token endpoint URL. For Azure, use https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token
+      visible-if:
+        auth-method: oauth
+    - name: oauth-scope
+      display-name: OAuth Scope (optional)
+      required: false
+      placeholder: "api://trino/.default"
+      helper-text: The scope to request when fetching an OAuth token. For Azure, this is typically api://{resource}/.default
+      visible-if:
+        auth-method: oauth
+    - group:
+        container-style: ["component", "backdrop"]
+        fields:
+        - ssl
+        - ssh-tunnel
+    - name: roles
+      display-name: Role (optional)
+      required: false
+      helper-text: Specify a role to override the database user's default role.
+    - name: prepared-optimized
+      display-name: Optimized prepared statements
+      type: boolean
+      required: false
+      default: false
+      description: Requires Trino version 418 or higher.
+    - advanced-options-start
+    - merge:
+        - additional-options
+        - placeholder: "trustServerCertificate=false"
+    - default-advanced-options
+init:
+  - step: load-namespace
+    namespace: metabase.driver.starburst
+  - step: load-namespace
+    namespace: metabase.driver.trino
+  - step: register-jdbc-driver
+    class: io.trino.jdbc.TrinoDriver
